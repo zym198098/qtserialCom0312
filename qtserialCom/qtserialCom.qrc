@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/qtserialCom">
+        <file>help.htm</file>
+    </qresource>
+</RCC>
