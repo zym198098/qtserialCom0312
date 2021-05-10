@@ -1,4 +1,4 @@
-﻿#include "serialthread.h"
+#include "serialthread.h"
 
 serialthread::serialthread(QObject *parent)
 	: QObject(parent)
@@ -9,13 +9,13 @@ serialthread::serialthread(QObject *parent)
 	serial->setStopBits(stopBits);
 	serial->setParity(Parity);
 }
-serialthread::serialthread(QObject *parent, QString portname1, QSerialPort::BaudRate BaudRate1, QSerialPort::StopBits stopBits1, QSerialPort::Parity party1, QSerialPort::DataBits databits1) : QObject(parent)
+serialthread::serialthread(QObject *parent, QString portname1, QSerialPort::BaudRate BaudRate1, QSerialPort::StopBits stopBits1, QSerialPort::Parity Parity1, QSerialPort::DataBits databits1) : QObject(parent)
 {
 	serial = new QSerialPort();
 	serial->setPortName(portname1);
 	serial->setBaudRate(BaudRate1);
 	serial->setStopBits(stopBits1);
-	serial->setParity(party1);
+	serial->setParity(Parity1);
 }
 serialthread::~serialthread()
 {
@@ -33,21 +33,17 @@ serialthread::~serialthread()
 void serialthread::open()
 {
 	com_start=serial->open(QSerialPort::ReadWrite);
-	
-	if (com_start)
-	{
 		serial_thread = std::move(std::thread(&serialthread::Execute, this));
-	}
+
 	
 }
 
 void serialthread::stop()
 {
 	com_start = false;
-	if (serial_thread.joinable())
-	{
+	
 		serial_thread.join();
-	}
+	
 	serial->close();
 }
 
@@ -59,66 +55,70 @@ void serialthread::Execute()
 
 	while (com_start)
 	{
-		data = serial->readAll();
-		if (data.size() == 0)
-		{
-			std::chrono::milliseconds dura(1);
-			std::this_thread::sleep_for(dura);
-			continue;
-		}
-		sRecvTotal += data;
-		if (Fixed_length )
-		{
-			if (sRecvTotal.size() <= 2)
-			{
-				continue;
-			}
-			int datalen = sRecvTotal[length_num-1];//获取数据包长度 默认协议第二位为长度  通过设置length_num 改变协议传输长度
-			if (fix_rec_size != 0)  //fix_rec_size !=0 按照 fix_rec_size 大小接收；否则按照协议第二位为长度 接收
-			{
-				datalen= fix_rec_size;
-			}
-			
-			if (datalen == 0)//数据包长度不能为零
-			{
-				printf("data erro datalenth is 0 !");
-				sRecvTotal.clear();
-				data.clear();
-				continue;
-			}
-			//int r = sRecvTotal.size() / fix_rec_size;//按照固定大小接收
-			int r = sRecvTotal.size() / datalen;//按照数据包第二位长度接收
-			if (r)//fix_rec_size字节的正数倍发送
-			{
-				QByteArray send = sRecvTotal.left(datalen);
-				//QByteArray shex = send.toHex();//转16进制
-				emit readCom(send);
-				int si = sRecvTotal.size()% datalen;
-				if (si>0)
-				{
-					QByteArray Remaining = sRecvTotal.right(si);
-					sRecvTotal = Remaining;
-				}
-				else
-				{
-					sRecvTotal.clear();
-				}
-			}
-			else
-			{
 
+		switch (type)
+		{
+		case get_type::normal:
+			data = serial->readAll();
+			if (data.size() == 0)
+			{
+				serial_sleep(1);
+				break;
+			}
+			emit readCom(data);
+			data.clear();
+			break;
+		case get_type::fixsize:
+			data = serial->read(fix_size);
+			if (data.size() == 0)
+			{
+				serial_sleep(1);
+				break;
+			}
+			sRecvTotal = sRecvTotal + data;
+			if (sRecvTotal.length() == fix_size)
+			{
+				emit readCom(sRecvTotal);
+				data.clear();
+				sRecvTotal.clear();
 			}
 			
-			data.clear();
-		}
-		else
-		{
-			if (data.size() > 0)
+			break;
+		case get_type::length_bit:
+			data = serial->read(length_bit_at);
+			if (data.size() == 0)
 			{
-				emit readCom(data);
-				data.clear();
+				serial_sleep(1);
+				break;
 			}
+			if (data.size() == length_bit_at)
+			{
+				int sum = data[length_bit_at-1];
+				//���ճ��Ȳ��̶�
+				sRecvTotal = data + serial->read(sum);
+				if (sRecvTotal.length() == (sum + length_bit_at))
+				{
+					emit readCom(sRecvTotal);
+					sRecvTotal.clear();
+					data.clear();
+				}
+				
+			}
+			
+			break;
+		default:
+			data = serial->readAll();
+			if (data.size() == 0)
+			{
+				serial_sleep(1);
+				break;
+			}
+			emit readCom(data);
+			data.clear();
+			break;
 		}
+
+		
 		
 	
 	}
@@ -179,5 +179,31 @@ void serialthread::writeData(const char * data, int length)
 
 	}
 	serial->write(data,length);
+}
+
+void serialthread::set_get_by_length(bool Fixed_by_length)
+{
+	this->Fixed_by_length = Fixed_by_length;
+}
+
+void serialthread::set_length_bit(unsigned short length_bit_at)
+{
+	this->length_bit_at = length_bit_at;
+}
+
+void serialthread::set_get_fixsize(unsigned int fix_size)
+{
+	this->fix_size = fix_size;
+}
+
+void serialthread::set_get_type(get_type type)
+{
+	this->type = type;
+}
+
+void serialthread::serial_sleep(unsigned int ms)
+{
+	std::chrono::milliseconds dura(ms);
+	std::this_thread::sleep_for(dura);
 }
 

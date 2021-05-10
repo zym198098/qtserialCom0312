@@ -1,5 +1,5 @@
 #include "qtserialCom.h"
-
+#include <QTimer>
 #pragma execution_character_set("utf-8")
 qtserialCom::qtserialCom(QWidget *parent)
     : QMainWindow(parent)
@@ -7,41 +7,24 @@ qtserialCom::qtserialCom(QWidget *parent)
     ui.setupUi(this);
 	helpdialog = new helpDialog(this);
 	ui.btn_close->setEnabled(false);
-	////查找可用的串口
-	//foreach(const QSerialPortInfo &info, QSerialPortInfo::availablePorts())
-	//{
-	//	QSerialPort serial;
-	//	serial.setPort(info);
-	//	if (serial.open(QIODevice::ReadWrite))
-	//	{
-	//		ui.PortBox->addItem(serial.portName());
-	//		serial.close();
-	//	}
-	//}
 	initSerialPortSetting();//初始化
 	//设置波特率下拉菜单默认显示第一项
 	ui.BaudBox->setCurrentIndex(0); // 115200
 	serial_com = new serialthread(this);
-	
-	
+	com_type1 = com_type(ui.comboBox->currentIndex());
+	connect(ui.comboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [=](int index) {
+		com_type1 = com_type(index);
+	});
 	//connect(serial_com, &serial_com->readCom, this, &qtserialCom::readcom);
 	connect(serial_com, SIGNAL(readCom(QByteArray)), this, SLOT(readcom(QByteArray)));
+
 	connect(ui.btn_open, &QPushButton::clicked, this, [=]()
 	{
 
 		if (ui.btn_open->text() == "open")
 		{
-			serial_com->setport(ui.PortBox->currentText());
-			serial_com->setBaudRate(baudRate[ui.BaudBox->currentIndex()]);
-			serial_com->setDataBits(dataBits[ui.dataBits->currentIndex()]);
-			serial_com->setParity(parity[ui.parity->currentIndex()]);
-			serial_com->setStopBits(stopBits[ui.stopBits->currentIndex()]);
-			serial_com->Fixed_length = ui.ck_fix_lenth->isChecked();
-			if (serial_com->Fixed_length)
-			{
-				serial_com->length_num = ui.spin_size_in->value()+1;
-			}
-			serial_com->fix_rec_size = ui.read_bit->value();
+			
+			
 			if (serial_com->serial == nullptr)
 			{
 				return;
@@ -50,7 +33,7 @@ qtserialCom::qtserialCom(QWidget *parent)
 			{
 				return;
 			}
-
+			initcom();
 			serial_com->open();
 			statusBar()->clearMessage();
 
@@ -122,6 +105,28 @@ qtserialCom::qtserialCom(QWidget *parent)
 		
 		helpdialog->show();
 	});
+	
+	connect(ui.chbox_timer, &QCheckBox::stateChanged, this, [=](int state)
+	{
+		
+		switch (state)
+		{
+		case 2:
+			timSend->setInterval(ui.spinBox_ms->value());
+			timSend->setTimerType(Qt::PreciseTimer);
+			timSend->start();
+			connect(timSend, &QTimer::timeout, this, [=]() {
+				ui.btn_send->click();
+				//timSend->start();
+			});
+			break;
+		case 0:
+			timSend->stop();
+			break;
+		default:
+			break;
+		}
+	});
 
 }
 
@@ -168,6 +173,36 @@ QByteArray qtserialCom::QString2Hex(QString str)
 	}
 	senddata.resize(hexdatalen);
 	return senddata;
+}
+
+void qtserialCom::initcom()
+{
+	if (timSend == nullptr)
+	{
+		timSend = new QTimer();
+	}
+	serial_com->setport(ui.PortBox->currentText());
+	serial_com->setBaudRate(baudRate[ui.BaudBox->currentIndex()]);
+	serial_com->setDataBits(dataBits[ui.dataBits->currentIndex()]);
+	serial_com->setParity(parity[ui.parity->currentIndex()]);
+	serial_com->setStopBits(stopBits[ui.stopBits->currentIndex()]);
+	switch (com_type1)
+	{
+	case qtserialCom::normal:
+		serial_com->set_get_type(serialthread::get_type::normal);
+		break;
+	case qtserialCom::fixsize:
+		serial_com->set_get_type(serialthread::get_type::fixsize);
+		serial_com->set_get_fixsize(ui.read_bit->value());
+		break;
+	case qtserialCom::length_bit:
+		serial_com->set_get_type(serialthread::get_type::length_bit);
+		serial_com->set_length_bit(ui.spin_size_in->value());
+		break;
+	default:
+		serial_com->set_get_type(serialthread::get_type::normal);
+		break;
+	}
 }
 
 void qtserialCom::readcom(QByteArray comdata)
