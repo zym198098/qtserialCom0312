@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>969</width>
-    <height>612</height>
+    <height>623</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -286,6 +286,13 @@
          <widget class="QPushButton" name="btn_send">
           <property name="text">
            <string>send</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btn_thread">
+          <property name="text">
+           <string>跨线程发送</string>
           </property>
          </widget>
         </item>

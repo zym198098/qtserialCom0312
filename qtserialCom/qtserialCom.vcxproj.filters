@@ -72,4 +72,7 @@
       <Filter>Form Files</Filter>
     </QtUic>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\readme.md" />
+  </ItemGroup>
 </Project>

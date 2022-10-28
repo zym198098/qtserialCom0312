@@ -9,6 +9,8 @@
 #include "serialthread.h"
 #include "helpDialog.h"
 #include <QTimer>
+#include <queue>
+#include<vector>
 using namespace std;
 class qtserialCom : public QMainWindow
 {
@@ -17,8 +19,13 @@ class qtserialCom : public QMainWindow
 public:
 	void initSerialPortSetting();
     qtserialCom(QWidget *parent = Q_NULLPTR);
-	
+	~qtserialCom();
 	serialthread *serial_com;
+	std::thread t1;
+	
+	void t1_Execute();
+	bool write_com = false;
+	bool t1_quit = false;
 	QList<QSerialPortInfo> infolist;
 	QList<QSerialPort::BaudRate> baudRate;
 	QList<QSerialPort::DataBits> dataBits;
@@ -37,8 +44,11 @@ public:
 	com_type com_type1= com_type::normal;
 	// 定时发送-定时器
 	QTimer *timSend=nullptr;
+	unsigned long line_num = 0;
 public slots:
 	void readcom(QByteArray comdata);
+signals:
+	void writeCom_ser(QByteArray comdata);
 private:
     Ui::qtserialComClass ui;
 	helpDialog *helpdialog;

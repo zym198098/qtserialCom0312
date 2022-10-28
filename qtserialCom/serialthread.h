@@ -4,6 +4,7 @@
 #include <QtSerialPort/QSerialPort>
 #include <QtSerialPort/QSerialPortInfo>
 #include <thread>
+#pragma execution_character_set("utf-8")
 using namespace std;
 class serialthread : public QObject
 {
@@ -16,24 +17,23 @@ public:
 	bool com_start=false;//´®¿Ú´ò¿ª±êÖ¾
 	void open();
 	void stop();
-	void Execute();
+	
 	//½ÓÊÕÄ£Ê½ normal Ò»´ÎÈ«²¿½ÓÊÕ£»fixsize ½ÓÊÕ¹Ì¶¨³¤¶È£»length_bit °´Ğ­Òé½ÓÊÕÎ»¶¨ÒåµÄ³¤¶È½ÓÊÕ
 	enum get_type {
 		normal,//Ò»´ÎÈ«²¿½ÓÊÕ
 		fixsize,//½ÓÊÕ¹Ì¶¨³¤¶È
 		length_bit//°´Ğ­Òé½ÓÊÕÎ»¶¨ÒåµÄ³¤¶È½ÓÊÕ
 	};
-	
-	std::thread serial_thread;
+
 	QSerialPort *serial=nullptr;
 	void setport(QString portname1);
 	void setBaudRate(QSerialPort::BaudRate BaudRate1);
 	void setStopBits(QSerialPort::StopBits stopBits1);
 	void setParity(QSerialPort::Parity Parity1);
 	void setDataBits(QSerialPort::DataBits databits1);
-	void writeData(const QByteArray &data);
+	qint64 writeData(const QByteArray &data);
 	void writeData(const char * data);
-	void writeData(const char * data,int length);
+	qint64 writeData(const char * data,int length);
 	//ÉèÖÃÊÇ·ñ°´³¤¶È½ÓÊÕ
 	void set_get_by_length(bool Fixed_by_length);
 	//ÉèÖÃĞ­Òé½ÓÊÕµÄÊı¾İ³¤¶ÈÎ»£¬ÔÚµÚ¼¸Î»
@@ -43,6 +43,8 @@ public:
 	//ÉèÖÃ½ÓÊÕÄ£Ê½
 	void set_get_type(get_type type);
 	void serial_sleep(unsigned int ms);
+	QByteArray comdata;
+	void read_data();
 public:
 signals:
 void readCom(QByteArray comdata);
@@ -60,4 +62,6 @@ unsigned short length_bit_at = 3;//Ä¬ÈÏ Ğ­Òé´«Êä Êı¾İ³¤¶ÈÔÚ µÚ¶şÎ» ½ÓÊÕ³¤¶È¶¨Òåµ
 //¹Ì¶¨½ÓÊÕ³¤¶È
 unsigned fix_size = 6;
 int fix_rec_size = 0;//°´ÕÕ fix_rec_size ´óĞ¡½ÓÊÕ£»·ñÔò°´ÕÕĞ­ÒéµÚ¶şÎ»Îª³¤¶È ½ÓÊÕ
+
+
 };

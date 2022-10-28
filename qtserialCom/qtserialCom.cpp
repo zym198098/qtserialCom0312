@@ -1,5 +1,6 @@
 #include "qtserialCom.h"
 #include <QTimer>
+#include<QDatetime>
 #pragma execution_character_set("utf-8")
 qtserialCom::qtserialCom(QWidget *parent)
     : QMainWindow(parent)
@@ -18,6 +19,15 @@ qtserialCom::qtserialCom(QWidget *parent)
 	//connect(serial_com, &serial_com->readCom, this, &qtserialCom::readcom);
 	connect(serial_com, SIGNAL(readCom(QByteArray)), this, SLOT(readcom(QByteArray)));
 
+	
+	connect(this, &qtserialCom::writeCom_ser, this, [=](QByteArray data) {
+
+		serial_com->writeData(data);
+	});
+
+	/*connect(comboBox,
+		static_cast<void(QComboBox::*)(const QString&)>(&QComboBox::currentIndexChanged),
+		label, &QLabel::setText);*/
 	connect(ui.btn_open, &QPushButton::clicked, this, [=]()
 	{
 
@@ -42,6 +52,7 @@ qtserialCom::qtserialCom(QWidget *parent)
 				statusBar()->showMessage("com open " + serial_com->serial->portName(), 3000);
 				ui.btn_open->setEnabled(false);
 				ui.btn_close->setEnabled(true);
+				//t1 = std::move(std::thread(&qtserialCom::t1_Execute, this));
 			}
 			else
 			{
@@ -85,8 +96,19 @@ qtserialCom::qtserialCom(QWidget *parent)
 			{
 				sendhex = QString2Hex(ui.textEdit_send->toPlainText());
 			}
-			serial_com->writeData(sendhex);
+			if (serial_com->writeData(sendhex))
+			{
+				QDateTime now = QDateTime::currentDateTime();
+				QString time = now.toString("yyyy:MM:dd:hh:mm:ss.zzz");
+				line_num++;
+				QString	data = QString::number(line_num) + QString("  ")+time + QString("  write  ") ;
+				data += ui.textEdit_send->toPlainText();
+				data += "\n";
+
+				ui.textBrowser->insertPlainText(data);
+			}
 			statusBar()->clearMessage();
+
 			statusBar()->showMessage("com write", 200);
 		}
 	});
@@ -95,7 +117,7 @@ qtserialCom::qtserialCom(QWidget *parent)
 		ui.textEdit_send->clear();
 	});
 	connect(ui.pushButton_3, &QPushButton::clicked, this, [=]()
-	{
+		{line_num = 0;
 		ui.textBrowser->clear();
 	});
 	connect(ui.cb_read_hex, &QCheckBox::stateChanged, this, [=]() {
@@ -112,12 +134,41 @@ qtserialCom::qtserialCom(QWidget *parent)
 		switch (state)
 		{
 		case 2:
+			
 			timSend->setInterval(ui.spinBox_ms->value());
 			timSend->setTimerType(Qt::PreciseTimer);
 			timSend->start();
 			connect(timSend, &QTimer::timeout, this, [=]() {
-				ui.btn_send->click();
-				//timSend->start();
+				if (serial_com->serial == nullptr)
+				{
+					return;
+				}
+				if (!serial_com->com_start)
+				{
+					return;
+				}
+				if (ui.textEdit_send->toPlainText().length())
+				{
+					QByteArray sendhex = ui.textEdit_send->toPlainText().toLatin1();
+					if (ui.cb_send_hex->isChecked())
+					{
+						sendhex = QString2Hex(ui.textEdit_send->toPlainText());
+					}
+					if (serial_com->writeData(sendhex))//如果发送成功
+					{
+						line_num++;
+						QDateTime now = QDateTime::currentDateTime();
+						QString time = now.toString("yyyy:MM:dd:hh:mm:ss.zzz");
+						QString	data =QString::number(line_num)+QString("  ")+ time + QString("  write  ");
+						data += ui.textEdit_send->toPlainText();
+						data += "\n";
+
+						ui.textBrowser->insertPlainText(data);
+					}
+					//statusBar()->clearMessage();
+					
+						statusBar()->showMessage("com write", 200);
+				}
 			});
 			break;
 		case 0:
@@ -128,6 +179,51 @@ qtserialCom::qtserialCom(QWidget *parent)
 		}
 	});
 
+	connect(ui.btn_thread, &QPushButton::clicked, this, [=]() {
+		if (serial_com->serial == nullptr)
+		{
+			return;
+		}
+		if (!serial_com->com_start)
+		{
+			return;
+		}
+		if (ui.textEdit_send->toPlainText().length())
+		{
+			write_com = true;
+		}
+	});
+	
+}
+
+qtserialCom::~qtserialCom()
+{
+	t1_quit = true;
+	if (t1.joinable())
+	{
+		t1.join();
+	}
+}
+
+void qtserialCom::t1_Execute()
+{
+	while (!t1_quit)
+	{
+		if (write_com)
+		{
+			QByteArray sendhex = ui.textEdit_send->toPlainText().toLatin1();
+			if (ui.cb_send_hex->isChecked())
+			{
+				sendhex = QString2Hex(ui.textEdit_send->toPlainText());
+			}
+			emit	writeCom_ser(sendhex);
+			//serial_com->writeData(sendhex);
+				
+
+			write_com = false;
+		}
+		this_thread::sleep_for(chrono::microseconds(1));
+	}
 }
 
 char qtserialCom::ConvertHexChar(char ch)
@@ -232,6 +328,10 @@ void qtserialCom::readcom(QByteArray comdata)
 	{
 		data += dataHex.at(i);
 	}
+	QDateTime now= QDateTime::currentDateTime();
+	QString time = now.toString("yyyy:MM:dd:hh:mm:ss.zzz");
+	line_num++;	
+	data = QString::number(line_num) + QString("  ")+ time + QString("  ") + data;
 	data += "\n";
 	ui.textBrowser->insertPlainText(data);
 	data.clear();
@@ -245,9 +345,17 @@ void qtserialCom::initSerialPortSetting()
 	
 	/* Insert the available serial ports into QComboBox. Keep infolist and ui->serialPortNumber in same order.*/
 	infolist = QSerialPortInfo::availablePorts();
-	foreach(const QSerialPortInfo& info, infolist)
+	
+	
+	foreach(const QSerialPortInfo &info, QSerialPortInfo::availablePorts())
 	{
-		ui.PortBox->addItem(info.portName());
+		QSerialPort serial;
+		serial.setPort(info);
+		if (serial.open(QIODevice::ReadWrite))
+		{
+			ui.PortBox->addItem(serial.portName());
+			serial.close();
+		}
 	}
 	if (ui.PortBox->count() == 0)
 	{
